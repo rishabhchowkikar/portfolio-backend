@@ -1,24 +1,39 @@
-name: Test Deployed API
+name: Deploy & Verify
 
 on:
   push:
     branches: ["main"]
 
 jobs:
-  test-api:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test /health endpoint
+      - name: Trigger Render Deploy
         run: |
-          echo "Checking health API..."
-          response=$(curl -s https://portfolio-backend-hzbj.onrender.com/health)
-          echo "Response: $response"
-          echo $response | grep "ok"
+          echo "🚀 Triggering deployment..."
+          curl -s -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
 
-      - name: Test /leaderboard endpoint
+      - name: Wait for Deployment to be Ready
         run: |
-          echo "Checking leaderboard API..."
-          response=$(curl -s https://portfolio-backend-hzbj.onrender.com/leaderboard)
-          echo "Response: $response"
-          echo $response | grep "leaderboard"
+          echo "⏳ Waiting for deployment to become healthy..."
+
+          MAX_ATTEMPTS=15
+          INTERVAL=10
+
+           for ((i=1;i<=MAX_ATTEMPTS;i++)); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://portfolio-backend-hzbj.onrender.com/health)
+
+            echo "Attempt $i/$MAX_ATTEMPTS → Status: $status"
+
+            if [ "$status" -eq 200 ]; then
+              echo "✅ Deployment successful!"
+              exit 0
+            fi
+
+            echo "Still not ready, retrying in $INTERVAL seconds..."
+            sleep $INTERVAL
+          done
+
+          echo "❌ Deployment failed after $MAX_ATTEMPTS attempts"
+          exit 1
